@@ -1,0 +1,17 @@
+#ifndef APP_CONFIG_H
+#define APP_CONFIG_H
+
+#define DOUT_FRONT_LEFT 12
+#define SCK_FRONT_LEFT 11
+
+#define DOUT_FRONT_RIGHT 10
+#define SCK_FRONT_RIGHT 9
+
+#define DOUT_BACK_LEFT 3
+#define SCK_BACK_LEFT 8
+
+#define DOUT_BACK_RIGHT 18
+#define SCL_BACK_RIGHT 17
+
+
+#endif // APP_CONFIG_H

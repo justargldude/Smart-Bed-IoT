@@ -1,0 +1,23 @@
+# ESP-IDF & PlatformIO Build Artifacts
+.pio/
+/build/
+/managed_components/
+
+# Configuration Backups & Variants
+sdkconfig*
+
+# Testing & Logs
+test/
+*.log
+
+# Editor & OS Junk (Clean Repository)
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Python cache
+*.pyc
+__pycache__/
