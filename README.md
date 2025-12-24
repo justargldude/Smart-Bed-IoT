@@ -1,9 +1,3 @@
-Dựa trên những thay đổi lớn về kiến trúc mà chúng ta vừa thực hiện (chuyển sang mô hình **Monorepo**, tách **STM32** làm Sensor Node đọc Loadcell và **ESP32** làm Gateway xử lý DSP), đây là nội dung file `README.md` đã được cập nhật chuẩn kỹ thuật và thực tế nhất cho dự án của bạn.
-
-Bạn có thể copy nội dung dưới đây đè vào file `README.md` ở thư mục gốc:
-
----
-
 # Smart-Bed-IoT: Non-Invasive Health Monitoring System
 
 **Smart-Bed-IoT** is a dual-MCU firmware implementation for a smart health monitoring bed. It utilizes a hybrid architecture combining **STM32** for high-precision sensor acquisition and **ESP32** for digital signal processing (DSP), IoT connectivity, and web hosting.
