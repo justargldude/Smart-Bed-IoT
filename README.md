@@ -101,15 +101,15 @@ UART is insufficient for remote monitoring, and standard HTTP requests are too s
 | --- | --- | --- |
 | GPIO 21 | MPU-9250 SDA | I2C Data |
 | GPIO 22 | MPU-9250 SCL | I2C Clock |
-| GPIO 16 | HX711 (TL) DOUT | Data Input (Top-Left) |
-| GPIO 17 | HX711 (TL) SCK | Clock (Top-Left) |
+| GPIO 12 | HX711 (TL) DOUT | Data Input (Top-Left) |
+| GPIO 11 | HX711 (TL) SCK | Clock (Top-Left) |
 | ... | ... | Check `app_config.h` for full map |
 
 ### Build & Flash
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/justargldude/ESP32-SHMB-Smart-Bed.git
+git clone https://github.com/justargldude/Smart-Bed-IoT.git
 
 ```
 
