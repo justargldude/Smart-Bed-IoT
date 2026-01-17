@@ -1,119 +1,164 @@
-Dựa trên những thay đổi lớn về kiến trúc mà chúng ta vừa thực hiện (chuyển sang mô hình **Monorepo**, tách **STM32** làm Sensor Node đọc Loadcell và **ESP32** làm Gateway xử lý DSP), đây là nội dung file `README.md` đã được cập nhật chuẩn kỹ thuật và thực tế nhất cho dự án của bạn.
+# Smart-Bed-IoT: Non-Invasive Health Monitoring System (ESP32-S3 Standalone)
 
-Bạn có thể copy nội dung dưới đây đè vào file `README.md` ở thư mục gốc:
+**Smart-Bed-IoT** is a contactless health monitoring system built on a Single-Chip architecture using the **ESP32-S3** platform. The system is capable of detecting presence, analyzing sleep posture, and monitoring respiration rates in real-time without requiring any sensors to be attached to the user's body.
 
----
-
-# Smart-Bed-IoT: Non-Invasive Health Monitoring System
-
-**Smart-Bed-IoT** is a dual-MCU firmware implementation for a smart health monitoring bed. It utilizes a hybrid architecture combining **STM32** for high-precision sensor acquisition and **ESP32** for digital signal processing (DSP), IoT connectivity, and web hosting.
-
-The system is designed to detect patient presence, determine sleeping posture, and monitor respiration rates without direct body contact, utilizing physics-based logic and signal analysis.
+The project leverages the dual-core Xtensa LX7 processor of the ESP32-S3: one core is dedicated to real-time sensor data acquisition, while the other handles digital signal processing (DSP) and IoT connectivity.
 
 ---
 
-## 1. System Architecture
+## Table of Contents
 
-The system operates on a distributed processing model to optimize performance and modularity.
+* System Architecture
+* Key Features
+* Hardware Configuration
+* Software Structure
+* Installation & Build
+* Disclaimer
+* Author
 
-### Hardware Architecture
+---
 
-| Component | Device | Function |
+## System Architecture
+
+The system integrates the entire signal acquisition and processing workflow into a single ESP32-S3 microcontroller to minimize latency and simplify the hardware design.
+
+```mermaid
+graph TD
+    subgraph "Sensing & Actuation (Core 0)"
+        LC[4x Load Cells] -->|HX711 / GPIO Polling| ESP32[ESP32-S3 SoC]
+        MPU[MPU-9250 IMU] -->|SPI Direct / 100Hz| ESP32
+    end
+
+    subgraph "Internal Processing (Core 1)"
+        ESP32 -->|Raw Data| DSP[DSP Engine: LPF & Fusion]
+        DSP -->|State Logic| RTOS[FreeRTOS Tasks]
+        RTOS -->|WebSocket| WEB[Web Dashboard]
+    end
+
+```
+
+### Resource Allocation (Dual-Core Architecture)
+
+| Core | Task | Description |
 | --- | --- | --- |
-| **Gateway & DSP** | **ESP32-S3 DevKit** | Wi-Fi/WebSocket Server, Respiration DSP (MPU9250), Data aggregation. |
-| **Sensor Node** | **STM32F4/F1 Series** | Real-time acquisition of 4x Load Cells (HX711), Raw data filtering, UART transmission. |
-| **Sensors** | MPU-9250 (IMU) | Connected to ESP32 via I2C for vibration-based respiration monitoring. |
-| **Sensors** | 50kg Load Cell (x4) | Connected to STM32 via HX711 for weight distribution analysis. |
-| **Communication** | UART (Serial) | High-speed link between STM32 (TX) and ESP32 (RX). |
-
-### Software Stack
-
-* **ESP32 Firmware:** Built with **ESP-IDF / PlatformIO**. Handles FreeRTOS tasks, WebSocket telemetry, and Butterworth filtering for breathing detection.
-* **STM32 Firmware:** Built with **Keil MDK & STM32 HAL**. Handles precise timing (DWT), HX711 bit-banging, and load cell calibration.
+| **Core 0** | **Sensor Acquisition** | Reads raw data from 4 Load Cells (HX711) and the MPU-9250 via SPI. Ensures precise timing for bit-banging protocols and high-frequency SPI communication. |
+| **Core 1** | **DSP & Connectivity** | Executes noise filtering algorithms (Butterworth/EMA), calculates Respiration BPM, and manages Wi-Fi connections and the WebSocket Server. |
 
 ---
 
-## 2. Directory Structure (Monorepo)
+## Key Features
+
+### 1. Presence Detection
+
+* **Sensors:** 4x Load Cells (5kg capacity each).
+* **Logic:** Aggregates the total weight from the four bed legs. The system automatically wakes up when a user is detected and enters a low-power deep sleep mode when the bed is empty.
+
+### 2. Posture Classification
+
+* **Algorithm:** Calculates the Center of Gravity (CoG) based on the differential pressure distribution across the four corners of the bed.
+* **Classes:** Supine (Back), Left Lateral, Right Lateral.
+
+### 3. Contactless Respiration Monitoring
+
+* **Sensor:** MPU-9250 (Z-axis Accelerometer) placed under the pillow or mattress.
+* **Signal Processing:**
+1. **LPF (5Hz):** Removes electrical noise and high-frequency hardware vibrations.
+2. **Baseline Removal:** Eliminates the static gravity component (DC Offset).
+3. **Peak Detection:** Counts breathing cycles using a hysteresis-based peak detection algorithm to prevent false positives from noise.
+
+
+* **Motion Rejection:** Automatically freezes the respiration counter when the Load Cells detect significant body movement.
+
+### 4. Web Dashboard
+
+* **Interface:** A Web Server hosted directly on the ESP32.
+* **Visualization:** Real-time respiration waveform, BPM value, and posture status.
+* **Protocol:** WebSocket (low latency).
+
+---
+
+## Hardware Configuration
+
+### Pinout Mapping
+
+The GPIO pins are defined in `app_config.h` for the ESP32-S3 DevKit:
+
+| Device | ESP32 Pin | Function | Protocol |
+| --- | --- | --- | --- |
+| **MPU-9250** | GPIO 10 | CS | SPI |
+|  | GPIO 11 | MOSI |  |
+|  | GPIO 12 | SCLK |  |
+|  | GPIO 13 | MISO |  |
+| **LoadCell FL** | GPIO 1 / 2 | SCK / DT | Bit-banging |
+| **LoadCell FR** | GPIO 42 / 41 | SCK / DT |  |
+| **LoadCell BL** | GPIO 40 / 39 | SCK / DT |  |
+| **LoadCell BR** | GPIO 38 / 37 | SCK / DT |  |
+
+*(Note: Connect the GND of all sensors to the GND of the ESP32)*
+
+---
+
+## Software Structure
+
+The project uses the **ESP-IDF** (Espressif IoT Development Framework).
 
 ```text
 Smart-Bed-IoT/
-├── firmware_esp32/           # ESP32 Gateway Firmware (PlatformIO)
-│   ├── src/
-│   │   ├── main.c            # Task Scheduler & UART Parser
-│   │   ├── dsp_filter.c      # Respiration Signal Processing
-│   │   └── web_server.c      # WebSocket Handler
-│   ├── include/
-│   └── platformio.ini
-│
-├── firmware_stm32/           # STM32 Sensor Node Firmware (Keil MDK)
-│   ├── MDK-ARM/              # Keil Project Files
-│   ├── Core/Src/main.c       # Sensor Loop & Data transmission
-│   ├── drv_loadcell/         # HX711 Driver (Custom HAL implementation)
-│   └── ...
-├── .gitignore
-└── README.md                 # Project Documentation
+├── src/
+│   ├── main.c              # Application Entry Point & Task Scheduler
+│   ├── drv_loadcell.c      # Optimized HX711 Driver
+│   ├── drv_mpu.c           # MPU9250 SPI Driver
+│   └── web_server.c        # Wi-Fi & WebSocket Implementation
+├── include/
+│   ├── app_config.h              # Pin Definitions & Constants
+│   ├── drv_loadcell.h
+│   ├── drv_mpu.h
+├── CMakeLists.txt
+└── README.md
 
 ```
 
 ---
 
-## 3. Functional Logic
+## Installation & Build
 
-### A. Weight & Posture (STM32 Node)
+### Prerequisites
 
-* **Data Acquisition:** The STM32 polls 4 separate HX711 modules using DWT-based microsecond delays for timing accuracy.
-* **Preprocessing:** Applies a Moving Average Filter to stabilize weight readings.
-* **Transmission:** Sends a formatted packet (JSON or Binary) to the ESP32 via UART containing raw weight data from 4 quadrants (Front-Left, Front-Right, Back-Left, Back-Right).
+1. **Hardware:** ESP32-S3 DevKit, MPU-9250, 4x Load Cells + HX711.
+2. **Software:** VS Code with the Espressif IDF Extension.
 
-### B. Signal Processing & Connectivity (ESP32 Gateway)
+### Setup Steps
 
-* **Presence Detection:** Aggregates total weight received from STM32. If Total > Threshold, the system enters ACTIVE mode.
-* **Posture Recognition:** Calculates the **Center of Gravity (CoG)** based on the differential weight distribution to classify posture: *Supine, Left-Lateral, Right-Lateral*.
-* **Respiration Monitoring:** Reads the MPU-9250 Z-axis accelerometer data at 100Hz. Applies a Low-Pass Butterworth Filter (Cutoff ~1Hz) to isolate breathing movements from noise.
+1. **Clone the repository:**
+```bash
+git clone https://github.com/justargldude/Smart-Bed-IoT
 
----
-
-## 4. Key Technical Highlights
-
-1. **Hybrid Processing:** Offloading the "bit-banging" intensive task of reading 4 Load Cells to the STM32 ensures the ESP32's CPU is free for heavy Wi-Fi and DSP operations.
-2. **Robust Driver Implementation:** Custom `drv_loadcell` for STM32 using DWT Cycle Counter ensures precise timing for the HX711 protocol, unaffected by HAL overhead.
-3. **Real-time Telemetry:** Uses WebSockets to push sensor data to a client dashboard with low latency (< 200ms), avoiding the overhead of HTTP polling.
-
----
-
-## 5. Getting Started
-
-### Hardware Wiring
-
-* **Inter-Chip Connection:**
-* STM32 TX pin  ESP32 RX pin.
-* GND  GND (Common Ground is mandatory).
+```
 
 
-* **Sensors:**
-* Load Cells  STM32 GPIOs (Configured in CubeMX).
-* MPU-9250  ESP32 I2C Pins.
+2. **Configure Project:**
+* Open the Command Palette in VS Code.
+* Select `ESP-IDF: SDK Configuration Editor`.
+* Configure the Flash size (4MB/8MB) and CPU Frequency (240MHz).
 
 
+3. **Build & Flash:**
+* Connect the ESP32-S3 via USB.
+* Click **Build, Flash and Monitor** in VS Code.
 
-### Build & Flash
 
-**1. STM32 Node:**
+4. **Visualize Data:**
+* Raw data in the format `Accel_X, Accel_Y, Accel_Z` is printed to the UART/Terminal.
+* Connect to the Wi-Fi Access Point created by the ESP32 to view the Web Dashboard.
 
-* Open `firmware_stm32/MDK-ARM/test.uvprojx` in **Keil uVision**.
-* Build (F7) and Download (F8) to the STM32 board.
 
-**2. ESP32 Gateway:**
-
-* Open `firmware_esp32` in **VS Code** (with PlatformIO extension).
-* Connect ESP32 via USB.
-* Run: `PlatformIO: Upload` and `PlatformIO: Monitor`.
 
 ---
 
 ## Disclaimer
 
-This project is a prototype for educational and research purposes. It is **not** a certified medical device and should not be used as a replacement for professional medical equipment in critical care scenarios.
+* **Power Supply:** The ESP32-S3 consumes significant current when Wi-Fi is active. Ensure a stable power supply (>500mA) is used to prevent voltage drops that could affect ADC readings.
+* **Safety:** This project is a research prototype intended for educational purposes only. It is not a certified medical device and should not be used as a replacement for professional medical equipment for diagnosis or patient monitoring.
 
 ## Author
 

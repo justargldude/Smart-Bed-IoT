@@ -21,22 +21,3 @@ Thumbs.db
 # Python cache
 *.pyc
 __pycache__/
-
-# Keil MDK-ARM Ignore
-*.uvguix.*
-*.uvoptx
-*.bak
-*.dep
-*.o
-*.d
-*.crf
-*.htm
-*.lnp
-*.sct
-*.map
-*.axf
-*.iex
-*.build_log.htm
-/firmware_stm32/**/Listings/
-/firmware_stm32/**/Objects/
-/firmware_stm32/**/RTE/

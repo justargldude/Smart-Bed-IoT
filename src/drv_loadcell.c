@@ -1,46 +1,50 @@
 /**
  * @file drv_loadcell.c
- * @brief Implementation of HX711 Driver.
+ * @brief HX711 Load Cell driver for ESP32
  */
 
 #include "drv_loadcell.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
-// Private Helper Functions
+// Spinlock to protect critical bit-banging section
+static portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
 
-/**
- * @brief Microsecond delay using DWT (Data Watchpoint and Trace).
- * Requires loadcell_init_dwt() to be called once.
- */
 static inline void delay_us(uint32_t us) 
 {
-    uint32_t start = DWT->CYCCNT;
-    uint32_t cycles = us * (SystemCoreClock / 1000000);
-    while ((DWT->CYCCNT - start) < cycles);
+    esp_rom_delay_us(us);
 }
 
-// Public Functions 
-
-void loadcell_init_dwt(void) 
+esp_err_t loadcell_init(loadcell_t *sensor, gpio_num_t dout_pin, gpio_num_t sck_pin) 
 {
-    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CYCCNT = 0;
-    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-}
-
-HAL_StatusTypeDef loadcell_init(loadcell_t *sensor, GPIO_TypeDef *dout_port, uint16_t dout_pin, GPIO_TypeDef *sck_port, uint16_t sck_pin) 
-{
-    sensor->dout_port = dout_port;
     sensor->dout_pin = dout_pin;
-    sensor->sck_port = sck_port;
     sensor->sck_pin = sck_pin;
     sensor->offset = 0;
     sensor->scale = 1.0f;
     sensor->is_initialized = true;
 
-    // Ensure SCK is low to prevent entering power-down mode unexpectedly
-    HAL_GPIO_WritePin(sensor->sck_port, sensor->sck_pin, GPIO_PIN_RESET);
+    // Configure GPIO
+    gpio_config_t io_conf = {};
     
-    return HAL_OK;
+    // Config DOUT as Input
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    io_conf.mode = GPIO_MODE_INPUT;
+    io_conf.pin_bit_mask = (1ULL << dout_pin);
+    io_conf.pull_down_en = 0;
+    io_conf.pull_up_en = 0; // HX711 has external pull-up or not needed
+    gpio_config(&io_conf);
+
+    // Config SCK as Output
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.pin_bit_mask = (1ULL << sck_pin);
+    io_conf.pull_down_en = 0;
+    io_conf.pull_up_en = 0;
+    gpio_config(&io_conf);
+
+    // Ensure SCK is low to prevent entering power-down mode unexpectedly
+    gpio_set_level(sensor->sck_pin, 0);
+    
+    return ESP_OK;
 }
 
 int32_t loadcell_read_raw(loadcell_t *sensor) 
@@ -49,50 +53,50 @@ int32_t loadcell_read_raw(loadcell_t *sensor)
 
     // 1. Wait for DOUT to go low (Data Ready)
     int16_t timeout = LC_TIMEOUT_US;
-    while (HAL_GPIO_ReadPin(sensor->dout_port, sensor->dout_pin) == GPIO_PIN_SET) 
-		{
+    while (gpio_get_level(sensor->dout_pin) == 1) 
+    {
         delay_us(1);
         if (--timeout <= 0) return LC_ERROR_CODE;
     }
 
     uint32_t value = 0;
 
-    // 2. Critical Section: Disable interrupts to prevent timing distortion
-    __disable_irq();
+    // 2. Critical Section: Disable interrupts/scheduling on this core
+    portENTER_CRITICAL(&spinlock);
 
     // 3. Read 24 bits (MSB First)
     for (int i = 0; i < 24; i++) 
-		{
+    {
         // Clock High
-        HAL_GPIO_WritePin(sensor->sck_port, sensor->sck_pin, GPIO_PIN_SET);
+        gpio_set_level(sensor->sck_pin, 1);
         delay_us(1);
 
         // Shift buffer
         value = value << 1;
 
         // Sample DOUT
-        if (HAL_GPIO_ReadPin(sensor->dout_port, sensor->dout_pin) == GPIO_PIN_SET) 
-				{
+        if (gpio_get_level(sensor->dout_pin)) 
+        {
             value++;
         }
 
         // Clock Low
-        HAL_GPIO_WritePin(sensor->sck_port, sensor->sck_pin, GPIO_PIN_RESET);
+        gpio_set_level(sensor->sck_pin, 0);
         delay_us(1);
     }
 
     // 4. 25th Pulse for Gain 128 / Channel A
-    HAL_GPIO_WritePin(sensor->sck_port, sensor->sck_pin, GPIO_PIN_SET);
+    gpio_set_level(sensor->sck_pin, 1);
     delay_us(1);
-    HAL_GPIO_WritePin(sensor->sck_port, sensor->sck_pin, GPIO_PIN_RESET);
+    gpio_set_level(sensor->sck_pin, 0);
     delay_us(1);
 
-    // 5. Re-enable interrupts
-    __enable_irq();
+    // 5. Exit Critical Section
+    portEXIT_CRITICAL(&spinlock);
 
     // 6. Sign Extension (24-bit to 32-bit signed)
     if (value & (1UL << 23)) 
-		{
+    {
         value |= HX711_SIGN_MASK;
     }
 
@@ -107,16 +111,15 @@ int32_t loadcell_read_average(loadcell_t *sensor, uint8_t times)
     uint8_t valid_count = 0;
     
     for (uint8_t i = 0; i < times; i++) 
-		{
+    {
         int32_t raw = loadcell_read_raw(sensor);
         if (raw != LC_ERROR_CODE) 
-				{
+        {
             sum += raw;
             valid_count++;
         }
-        // Small delay between readings isn't strictly necessary for HX711 
-        // as it updates at 10Hz/80Hz, but helps stability
-        HAL_Delay(10); 
+        // Small delay
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 
     if (valid_count == 0) return LC_ERROR_CODE;
@@ -124,7 +127,6 @@ int32_t loadcell_read_average(loadcell_t *sensor, uint8_t times)
 }
 
 void loadcell_tare(loadcell_t *sensor) {
-    // Take average of 10 readings for tare
     int32_t avg = loadcell_read_average(sensor, 10);
     if (avg != LC_ERROR_CODE) {
         sensor->offset = avg;
@@ -135,9 +137,9 @@ void loadcell_set_scale(loadcell_t *sensor, float scale_value) {
     sensor->scale = scale_value;
 }
 
-float loadcell_get_weight(loadcell_t *sensor) {
+int16_t loadcell_get_weight(loadcell_t *sensor) {
     int32_t raw = loadcell_read_raw(sensor);
-    if (raw == LC_ERROR_CODE) return 0.0f;
+    if (raw == LC_ERROR_CODE) return 0;
     
-    return (float)(raw - sensor->offset) / sensor->scale;
+    return (int16_t)(raw - sensor->offset)*1000 / sensor->scale;
 }
