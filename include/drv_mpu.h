@@ -22,7 +22,10 @@ typedef struct {
     
     // Output in Fixed-Point format
     int32_t accel_mg[3];   // milli-g
-    int32_t gyro_mdps[3];  // milli-dps
+
+    int32_t accel_ma[3];
+    int32_t gyro_ma[3];
+    bool data_ready;
 
     // Sensitivity for conversion
     uint16_t accel_sens;   
@@ -50,10 +53,12 @@ typedef struct {
 #define CONFIG_GYRO           0x00 // ±250dps
 #define BANDWIDTH             0x06
 #define SMPLRT_DIV            0x09
+#define ALPHA 0.1f
 
 // === PROTOTYPES ===
 esp_err_t mpu_init(MPU9250_t *dev);
 esp_err_t spi_read_byte(MPU9250_t *dev, uint8_t regAddress, uint8_t *data);
 esp_err_t mpu_read_all(MPU9250_t *dev); 
+void moving_average(MPU9250_t *dev);
 
 #endif // DRV_MPU_H

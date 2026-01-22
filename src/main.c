@@ -16,6 +16,7 @@
 #include "app_config.h"
 #include "drv_loadcell.h"
 #include "drv_mpu.h"
+#include "wifi_config.h"
 
 static const char *TAG = "MAIN";
 
@@ -62,13 +63,24 @@ void init_spi_bus(void) {
     gpio_config(&io_conf);
     
     myMpu.cs_pin = MPU_PIN_NUM_CS;
-    gpio_set_level(myMpu.cs_pin, 1); // Set CS High initially
+    gpio_set_level(myMpu.cs_pin, 1);
 }
 
 void app_main(void)
 {
-    // Initialize SPI
-    init_spi_bus();
+    // WiFi init
+    if (wifi_init_sta_with_provisioning() != ESP_OK) {
+        ESP_LOGE(TAG, "WiFi init failed");
+        Error_Handler();
+    }
+
+    // Wait for WiFi (60s for first-time provisioning)
+    if (!wifi_wait_connected(60000)) {
+        ESP_LOGW(TAG, "WiFi timeout");
+    }
+
+    // Hardware init
+    /* init_spi_bus();
     ESP_LOGI(TAG, "System Starting");
 
     // Initialize MPU
@@ -102,28 +114,49 @@ void app_main(void)
     // Main Loop
     while (1)
     {
-        uint8_t whoami;
-        esp_err_t ret;
+        if (mpu_read_all(&myMpu) == ESP_OK) {
+            moving_average(&myMpu);
+            
 
-        // Check MPU ID
-        ret = spi_read_byte(&myMpu, MPU_REG_WHO_AM_I, &whoami);
-
-        if (ret == ESP_OK && whoami == 0x70) {
-            // Uncomment to debug connection status
+            if (myMpu.data_ready) {
+                printf("%ld,%ld,%ld\n", myMpu.accel_ma[0], myMpu.accel_ma[1], myMpu.accel_ma[2]);
+                myMpu.data_ready = false;
+            }
         } else {
-            printf("MPU DISCONNECTED! ID: 0x%02X\n", whoami);
+            ESP_LOGW(TAG, "MPU Read Failed");
+            Error_Handler();
         }
 
-        // Read MPU Data
-        mpu_read_all(&myMpu);
+        int16_t FL_sensor = loadcell_get_weight(&sensor_front_left);
+        int16_t FR_sensor = loadcell_get_weight(&sensor_front_right);
+        int16_t BL_sensor = loadcell_get_weight(&sensor_back_left);
+        int16_t BR_sensor = loadcell_get_weight(&sensor_back_right);
+
+        if(FL_sensor > 2 && FR_sensor>2 && BL_sensor > 2 && BR_sensor > 2){
+            // return
+        }
+        if(FL_sensor > 2 && FR_sensor>2){
+            // return
+        }
+        if(FR_sensor>2 && BL_sensor > 2){
+            // return
+        }
+        if(BL_sensor > 2 && BR_sensor > 2){
+            // return
+        }
+        if(FL_sensor > 2 && BR_sensor > 2){
+            // return
+        } 
+
+
+
+
+
+
+
         
-        // Print CSV for SerialPlot
-        // Format: Accel_X, Accel_Y, Accel_Z
-        printf("%ld,%ld,%ld\n", myMpu.accel_mg[0], myMpu.accel_mg[1], myMpu.accel_mg[2]);
-        
-        // Delay 20ms ~ 50Hz sample rate
         vTaskDelay(pdMS_TO_TICKS(20));
-    }
+    }*/
 }
 
 void Error_Handler(void)

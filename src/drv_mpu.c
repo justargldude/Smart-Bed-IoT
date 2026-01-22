@@ -111,6 +111,12 @@ esp_err_t mpu_init(MPU9250_t *dev){
     // Set sensitivity dividers
     dev->accel_sens = ACCEL_SENSITIVITY;
     dev->gyro_sens = GYRO_SENSITIVITY;
+    dev->data_ready = false;
+    for (int i = 0; i < 3; i++)
+    {
+        dev->accel_ma[i] = 0;
+    }
+    
     
     esp_err_t status;
     status = check_connection(dev);
@@ -127,8 +133,10 @@ esp_err_t mpu_init(MPU9250_t *dev){
     status = spi_write_byte(dev, MPU_REG_CONFIG, BANDWIDTH);
     status = spi_write_byte(dev, MPU_REG_ACCEL_CONFIG_2, BANDWIDTH);
     status = spi_write_byte(dev, MPU_REG_SMPLRT_DIV, SMPLRT_DIV);
-    
-    return status;
+
+    if(status != ESP_OK) return status;
+
+    return ESP_OK;
 }
 
 esp_err_t mpu_read_all(MPU9250_t *dev){
@@ -144,16 +152,22 @@ esp_err_t mpu_read_all(MPU9250_t *dev){
     dev->accel_raw[2] = (int16_t)(buffer[4] << 8 | buffer[5]); 
 
     // Gyro: Byte 8-13
-    dev->gyro_raw[0]  = (int16_t)(buffer[8] << 8 | buffer[9]);  
+    /* dev->gyro_raw[0]  = (int16_t)(buffer[8] << 8 | buffer[9]);  
     dev->gyro_raw[1]  = (int16_t)(buffer[10] << 8 | buffer[11]); 
-    dev->gyro_raw[2]  = (int16_t)(buffer[12] << 8 | buffer[13]); 
+    dev->gyro_raw[2]  = (int16_t)(buffer[12] << 8 | buffer[13]); */
 
     for(int i = 0; i < 3; i++){
         int64_t temp_a = (int64_t)dev->accel_raw[i] * 1000;
         dev->accel_mg[i] = (int32_t)(temp_a / dev->accel_sens);
-        
-        int64_t temp_g = (int64_t)dev->gyro_raw[i] * 1000;
-        dev->gyro_mdps[i] = (int32_t)(temp_g / dev->gyro_sens);
     }
     return ESP_OK;
+}
+
+void moving_average(MPU9250_t *dev){
+    for (int i = 0; i < 3; i++) {
+        // Công thức: Out = Alpha * Input + (1 - Alpha) * Previous_Out
+        dev->accel_ma[i] = (int32_t)(ALPHA * dev->accel_mg[i] + (1.0f - ALPHA) * dev->accel_ma[i]);
+    }
+    // Luôn luôn có dữ liệu mới, không cần chờ count
+    dev->data_ready = true; 
 }

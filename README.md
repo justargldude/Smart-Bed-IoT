@@ -1,20 +1,8 @@
-# Smart-Bed-IoT: Non-Invasive Health Monitoring System (ESP32-S3 Standalone)
+# Smart-Bed-IoT: Non-Invasive Health Monitoring System
 
-**Smart-Bed-IoT** is a contactless health monitoring system built on a Single-Chip architecture using the **ESP32-S3** platform. The system is capable of detecting presence, analyzing sleep posture, and monitoring respiration rates in real-time without requiring any sensors to be attached to the user's body.
+**Smart-Bed-IoT** is a dual-MCU firmware implementation for a smart health monitoring bed. It utilizes a hybrid architecture combining **STM32** for high-precision sensor acquisition and **ESP32** for digital signal processing (DSP), IoT connectivity, and web hosting.
 
-The project leverages the dual-core Xtensa LX7 processor of the ESP32-S3: one core is dedicated to real-time sensor data acquisition, while the other handles digital signal processing (DSP) and IoT connectivity.
-
----
-
-## Table of Contents
-
-* System Architecture
-* Key Features
-* Hardware Configuration
-* Software Structure
-* Installation & Build
-* Disclaimer
-* Author
+The system is designed to detect patient presence, determine sleeping posture, and monitor respiration rates without direct body contact, utilizing physics-based logic and signal analysis.
 
 ---
 
