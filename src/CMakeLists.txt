@@ -1,6 +1,7 @@
-# This file was automatically generated for projects
-# without default 'CMakeLists.txt' file.
+# SmartCrib ESP-IDF CMakeLists
 
-FILE(GLOB_RECURSE app_sources ${CMAKE_SOURCE_DIR}/src/*.*)
-
-idf_component_register(SRCS ${app_sources})
+idf_component_register(
+    SRCS "main.c" "mqtt_config.c" "wifi_config.c" "drv_loadcell.c" "drv_mpu.c"
+    INCLUDE_DIRS "../include"
+    EMBED_TXTFILES "../certs/root_ca.pem"
+)

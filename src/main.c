@@ -17,6 +17,7 @@
 #include "drv_loadcell.h"
 #include "drv_mpu.h"
 #include "wifi_config.h"
+#include "mqtt_config.h"
 
 static const char *TAG = "MAIN";
 
@@ -79,7 +80,19 @@ void app_main(void)
         ESP_LOGW(TAG, "WiFi timeout");
     }
 
-    // Hardware init
+    // MQTT init
+    if (mqtt_init() == ESP_OK) {
+        ESP_LOGI(TAG, "MQTT connected");
+    } else {
+        ESP_LOGW(TAG, "MQTT init failed");
+    }
+
+    // Main loop - keep alive
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+
+    // Hardware init (uncomment when ready)
     /* init_spi_bus();
     ESP_LOGI(TAG, "System Starting");
 
