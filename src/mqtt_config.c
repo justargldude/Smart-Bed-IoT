@@ -16,65 +16,6 @@ static const char *TAG = "MQTT";
 static esp_mqtt_client_handle_t mqtt_client = NULL;
 
 /**
- * @brief   Initialize and start the MQTT client
- *
- * @return  ESP_OK on success, ESP_FAIL on error
- */
-esp_err_t mqtt_init(void)
-{
-
-    // MQTT client configuration structure
-    esp_mqtt_client_config_t mqtt_cfg = {
-        .broker.address.uri = MQTT_BROKER_URI,
-        .broker.address.port = MQTT_BROKER_PORT,
-        .credentials.username = MQTT_USERNAME,
-        .credentials.authentication.password = MQTT_PASSWORD,
-        .broker.verification.certificate = (const char *)root_ca_pem_start,
-    };
-
-    // Initialize MQTT client
-    mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
-    if (mqtt_client == NULL) {
-        ESP_LOGE(TAG, "Failed to init MQTT client");
-        return ESP_FAIL;
-    }
-
-    // Register event handler for all MQTT events
-    esp_mqtt_client_register_event(mqtt_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
-
-    // Start MQTT client
-    esp_mqtt_client_start(mqtt_client);
-    return ESP_OK;
-}
-
-/**
- * @brief   Start the MQTT client if already initialized
- *
- * @return  ESP_OK on success, ESP_FAIL if not initialized
- */
-esp_err_t mqtt_start(void)
-{
-    if (mqtt_client == NULL) {
-        ESP_LOGE(TAG, "MQTT client not initialized");
-        return ESP_FAIL;
-    }
-    return esp_mqtt_client_start(mqtt_client);
-}
-
-/**
- * @brief   Stop the MQTT client
- *
- * @return  ESP_OK on success, ESP_FAIL if not initialized
- */
-esp_err_t mqtt_stop(void)
-{
-    if (mqtt_client == NULL) {
-        return ESP_FAIL;
-    }
-    return esp_mqtt_client_stop(mqtt_client);
-}
-
-/**
  * @brief   MQTT event handler callback
  *
  * @param   handler_args   User-defined handler arguments (unused)
@@ -149,4 +90,63 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             ESP_LOGD(TAG, "Unhandled event: %d", event->event_id);
             break;
     }
+}
+
+/**
+ * @brief   Initialize and start the MQTT client
+ *
+ * @return  ESP_OK on success, ESP_FAIL on error
+ */
+esp_err_t mqtt_init(void)
+{
+
+    // MQTT client configuration structure
+    esp_mqtt_client_config_t mqtt_cfg = {
+        .broker.address.uri = MQTT_BROKER_URI,
+        .broker.address.port = MQTT_BROKER_PORT,
+        .credentials.username = MQTT_USERNAME,
+        .credentials.authentication.password = MQTT_PASSWORD,
+        .broker.verification.certificate = (const char *)root_ca_pem_start,
+    };
+
+    // Initialize MQTT client
+    mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
+    if (mqtt_client == NULL) {
+        ESP_LOGE(TAG, "Failed to init MQTT client");
+        return ESP_FAIL;
+    }
+
+    // Register event handler for all MQTT events
+    esp_mqtt_client_register_event(mqtt_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
+
+    // Start MQTT client
+    esp_mqtt_client_start(mqtt_client);
+    return ESP_OK;
+}
+
+/**
+ * @brief   Start the MQTT client if already initialized
+ *
+ * @return  ESP_OK on success, ESP_FAIL if not initialized
+ */
+esp_err_t mqtt_start(void)
+{
+    if (mqtt_client == NULL) {
+        ESP_LOGE(TAG, "MQTT client not initialized");
+        return ESP_FAIL;
+    }
+    return esp_mqtt_client_start(mqtt_client);
+}
+
+/**
+ * @brief   Stop the MQTT client
+ *
+ * @return  ESP_OK on success, ESP_FAIL if not initialized
+ */
+esp_err_t mqtt_stop(void)
+{
+    if (mqtt_client == NULL) {
+        return ESP_FAIL;
+    }
+    return esp_mqtt_client_stop(mqtt_client);
 }
